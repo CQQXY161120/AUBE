@@ -1,0 +1,65 @@
+from metric_learn import LMNN
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import cross_val_score
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.neural_network import MLPClassifier
+from sklearn.svm import SVC
+from sklearn.ensemble import AdaBoostClassifier
+from sklearn.naive_bayes import GaussianNB
+
+import Function as PF
+import numpy as np
+import os
+from sklearn.preprocessing import MinMaxScaler
+datasets=['Appendicitis_7_2_106.txt','iris_4_3_150.txt','Wine_13_3_178.txt','sonar_60_2_208.txt','glass_9_3_175.txt',
+'spectfheart_44_2_267.txt','heart_13_2_270.txt','haberman_3_2_306.txt',  'bupa_6_2_345.txt', 'ionosphere_33_2_351.txt', 'movement_libras_90_15_360.txt','monk2_6_2_432.txt','led7digit_7_10_500.txt','wdbc_30_2_569.txt','Balance_4_3_625.txt','pima_diabetes_8_2_768.txt','vehicle_18_4_846.txt','vowel_13_11_990.txt','contraceptive_9_3_1473.txt','yeast_8_3_1136.txt','WineQuality_Red_11_3_1518.txt','Titanic_3_2_2201.txt','segment_19_7_2310.txt','spambase_57_2_4597.txt','WineQuality_White_11_3_4535.txt','banana_2_2_5300.txt','Phoneme_5_2_5404.txt','page_blocks_10_5_5472.txt','Texture_40_11_5500.txt','optdigits_64_10_5620.txt','satimage_36_6_6435.txt','thyroid_21_3_7200.txt','ring_20_2_7400.txt','twonorm_20_2_7400.txt','Penbased_6_10_10992.txt','Magic_10_2_19020.txt','Letter_16_26_20000.txt','Mnist_784_3_21075.txt']
+
+set_vlaue=2
+cv = 10
+classifiers = [
+    KNeighborsClassifier(3),
+    SVC(kernel="rbf", C=0.025),
+    MLPClassifier(solver='lbfgs', alpha=1e-5, hidden_layer_sizes=(5, 2), random_state=1),
+    RandomForestClassifier(max_depth=5, n_estimators=10, max_features=1),
+    AdaBoostClassifier(n_estimators=100),
+    GaussianNB()
+]
+
+Result_of_Upper = np.zeros([len(datasets),2])#LMNN和非度量学习
+Result_of_acc_ave_LMNN = np.zeros([len(datasets),len(classifiers)])
+Result_of_acc_std_LMNN = np.zeros([len(datasets),len(classifiers)])
+Result_of_acc_ave_Non = np.zeros([len(datasets),len(classifiers)])
+Result_of_acc_std_Non = np.zeros([len(datasets),len(classifiers)])
+
+for i in range(len(datasets)-3):
+    print(datasets[i])
+    new_path = os.path.join('.\data', datasets[i])
+    Data_Origi, DataLabel, n_samples, n_attr, n_class = PF.Load_Data(new_path)
+    #Normalize
+    scaler = MinMaxScaler()
+    scaler.fit(Data_Origi)
+    Data_Origi = scaler.transform(Data_Origi)
+    for l in range(2):
+        if l==0:
+            #Metric Learning
+            lmnn = LMNN(k=5, learn_rate=1e-6)
+            lmnn.fit(Data_Origi, DataLabel)
+            Data_trans = lmnn.transform(Data_Origi)
+        else:
+            Data_trans = Data_Origi
+        #Cover Fusion
+        Dis_Matrix = PF.Calcu_Dis(Data_trans)
+        CompareMatrix = PF.CompareLabel(Dis_Matrix, DataLabel)
+        Cluster_Checked = PF.Affinity_propagatio_Modify(CompareMatrix)
+        lap_ratio = PF.Count(Cluster_Checked, set_vlaue, n_samples)
+        Result_of_Upper[i,l] = 1- lap_ratio
+        for j in range(len(classifiers)):
+            clf = classifiers[j]
+            scores = cross_val_score(clf, Data_trans, DataLabel, cv=cv)
+            if l==0:
+                Result_of_acc_ave_LMNN[i, j] = scores.mean()
+                Result_of_acc_std_LMNN[i, j] = scores.std()
+            else:
+                Result_of_acc_ave_Non[i, j] = scores.mean()
+                Result_of_acc_std_Non[i, j] = scores.std()
+           
